@@ -18,5 +18,5 @@
 
 ## 运行方式
 
-- **定时触发**：GitHub Actions 每 2 小时定时轮询一次。
+- **定时触发**：GitHub Actions 每天上午 11:00（UTC 03:00）自动检查一次。
 - **手动触发**：在 GitHub 仓库的 `Actions` -> `Check & Release PJSK APK` 页面，点击 `Run workflow` 即可随时手动检测并发布。
