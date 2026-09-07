@@ -1,0 +1,65 @@
+name: Check & Release PJSK APK
+
+on:
+  schedule:
+    # 每天每 2 小时运行一次 (UTC 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22)
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '是否强制下载并发布 Release (忽略版本对比)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check and Download APKs
+        id: check_release
+        run: |
+          FORCE_FLAG=""
+          if [ "${{ inputs.force }}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+          python scripts/check_and_release.py $FORCE_FLAG
+
+      - name: Commit updated versions.json
+        if: steps.check_release.outputs.has_update == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add versions.json
+          git commit -m "chore: update versions.json [skip ci]" || echo "No changes to commit"
+          git push origin main
+
+      - name: Create Release and Upload APKs
+        if: steps.check_release.outputs.has_update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.check_release.outputs.release_tag }}"
+          TITLE="${{ steps.check_release.outputs.release_title }}"
+          OFFICIAL_APK="${{ steps.check_release.outputs.official_filename }}"
+          BILI_APK="${{ steps.check_release.outputs.bili_filename }}"
+          
+          echo "正在创建 Release: $TAG ($TITLE)"
+          
+          # 使用 gh cli 创建 Release 并一次性上传双服 APK
+          gh release create "$TAG" \
+            "$OFFICIAL_APK" \
+            "$BILI_APK" \
+            --title "$TITLE" \
+            --notes-file release_notes.md
